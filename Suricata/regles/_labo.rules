@@ -1,0 +1,19 @@
+# Corrigé — Labo Suricata / Angry Poutine (document enseignant)
+
+# --- Partie 3 : indicateurs atomiques ---
+alert dns $HOME_NET any -> any any (msg:"AP - Resolution du domaine de telechargement"; flow:to_server; dns.query; content:"simpsonsavingss.com"; nocase; endswith; classtype:trojan-activity; sid:1000001; rev:1;)
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"AP - Telechargement de BazarLoader"; flow:established,to_server; http.host; content:"simpsonsavingss.com"; endswith; http.uri; content:"/bmdff/"; startswith; classtype:trojan-activity; sid:1000002; rev:1;)
+alert ip $HOME_NET any -> [94.158.245.52,167.172.37.9,194.62.42.206] any (msg:"AP - Contact avec une IP malveillante"; classtype:trojan-activity; sid:1000003; rev:1;)
+alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"AP - Certificat du C2"; flow:established,to_client; tls.cert_subject; content:"CN=londonareloeli.uk"; endswith; classtype:trojan-activity; sid:1000004; rev:1;)
+alert http any any -> any any (msg:"AP - Empreinte SHA256 de BazarLoader"; filesha256:mauvais.sha256; classtype:trojan-activity; sid:1000005; rev:1;)
+
+# --- Partie 4 : comportements ---
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"Marque Windows Update"; flow:established,to_server; http.host; content:"windowsupdate.com"; endswith; flowbits:set,labo.windowsupdate; flowbits:noalert; sid:1000006; rev:1;)
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"Executable Windows recu en HTTP hors Windows Update"; flow:established,to_client; flowbits:isnotset,labo.windowsupdate; file.data; content:"MZ"; depth:2; content:"This program cannot be run in DOS mode"; distance:0; within:128; classtype:bad-unknown; sid:1000007; rev:2;)
+alert tls $HOME_NET any -> $EXTERNAL_NET any (msg:"Repetition de TLS sans SNI vers une meme IP"; flow:established,to_server; tls.sni; absent; threshold:type both, track by_dst, count 5, seconds 3600; classtype:bad-unknown; sid:1000008; rev:2;)
+alert smb $HOME_NET any -> any any (msg:"Enumeration SAMR du groupe domain admins"; flow:established,to_server; dcerpc.iface:12345778-1234-abcd-ef00-0123456789ac; dcerpc.stub_data; content:"d|00|o|00|m|00|a|00|i|00|n|00| |00|a|00|d|00|m|00|i|00|n|00|s|00|"; nocase; classtype:bad-unknown; sid:1000009; rev:1;)
+alert tls $HOME_NET any -> $EXTERNAL_NET any (msg:"Poste qui verifie son IP publique"; flow:established,to_server; tls.sni; content:"myexternalip.com"; endswith; classtype:bad-unknown; sid:1000010; rev:1;)
+
+# --- Bonus : datasets ---
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"Liste IOC - IP"; flags:S,12; ip.dst; dataset:isset,ioc-ip,type ipv4,load ioc-ip.lst; classtype:trojan-activity; sid:1000011; rev:1;)
+alert dns $HOME_NET any -> any any (msg:"Liste IOC - domaine"; flow:to_server; dns.query; dataset:isset,ioc-dom,type string,load ioc-dom.lst; classtype:trojan-activity; sid:1000012; rev:1;)
