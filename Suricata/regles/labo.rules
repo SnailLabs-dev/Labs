@@ -1,0 +1,10 @@
+# Labo Suricata — vos règles
+#
+# Structure d'une règle :
+#   action protocole source port -> destination port (options;)
+#
+# Exemple à conserver pour vérifier votre installation :
+alert http any any -> any any (msg:"LABO - Test requete GET"; flow:established,to_server; http.method; content:"GET"; sid:1000000; rev:1;)
+
+# Numérotez vos règles à partir de sid:1000001.
+# Augmentez rev à chaque modification d'une règle.

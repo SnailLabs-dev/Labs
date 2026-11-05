@@ -1,0 +1,14 @@
+%YAML 1.1
+---
+# Réglages du labo. La notation pointée ne remplace que la clé visée :
+# le reste de /etc/suricata/suricata.yaml reste intact.
+
+# Le réseau surveillé dans la capture Angry Poutine.
+vars.address-groups.HOME_NET: "[10.9.10.0/24]"
+
+# Évite deux avertissements sans intérêt quand Suricata lit un fichier sans sudo.
+unix-command.enabled: no
+detect.sgh-mpm-caching: no
+
+# Laissez cette ligne en commentaire jusqu'à l'étape 3.5.
+#app-layer.protocols.http.libhtp.default-config.response-body-limit: 0
