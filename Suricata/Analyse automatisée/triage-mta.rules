@@ -1,0 +1,75 @@
+# =====================================================================
+#  triage-mta.rules — Règles de triage pour pcaps de malware-traffic-analysis.net
+#  But : répondre vite aux questions habituelles (hôte, utilisateur,
+#        fichiers, C2, politiques). À utiliser EN PLUS de ET Open.
+#  Plage de SID locale : 1100000-1100999
+#  Testé avec Suricata 7.0
+# =====================================================================
+
+
+# ---------------------------------------------------------------------
+# [IDENTITÉ] Nom d'utilisateur et nom de machine
+#   (le hostname DHCP se lit mieux dans les événements "dhcp" — voir triage.sh)
+# ---------------------------------------------------------------------
+
+alert krb5 any any -> any any (msg:"TRIAGE [IDENTITE] Kerberos AS-REQ - compte utilisateur"; krb5_msg_type:10; krb5.cname; content:!"$"; endswith; metadata:triage identite; sid:1100001; rev:1;)
+
+alert krb5 any any -> any any (msg:"TRIAGE [IDENTITE] Kerberos AS-REQ - compte machine (hostname$)"; krb5_msg_type:10; krb5.cname; content:"$"; endswith; metadata:triage identite; sid:1100002; rev:1;)
+
+alert smb any any -> any any (msg:"TRIAGE [IDENTITE] Authentification SMB NTLMSSP"; smb.ntlmssp_user; bsize:>0; metadata:triage identite; sid:1100003; rev:1;)
+
+
+# ---------------------------------------------------------------------
+# [FICHIER] Téléchargements suspects
+#   (hashes : événements "fileinfo" avec force-hash — voir triage.sh)
+# ---------------------------------------------------------------------
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"TRIAGE [FICHIER] Executable Windows (MZ) recu par HTTP"; flow:established,to_client; file.data; content:"MZ"; startswith; content:"This program"; distance:0; within:200; metadata:triage fichier; sid:1100010; rev:1;)
+
+alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"TRIAGE [FICHIER] Archive ZIP recue par HTTP"; flow:established,to_client; file.data; content:"PK|03 04|"; startswith; metadata:triage fichier; sid:1100011; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [FICHIER] Requete HTTP vers une extension a risque"; flow:established,to_server; http.uri; pcre:"/\.(exe|dll|scr|msi|ps1|psm1|hta|vbs|vbe|js|jse|wsf|bat|cmd|lnk|iso|img|vhd|jar|zip|rar|7z|gz|bin|dat)(\?|$)/i"; metadata:triage fichier; sid:1100012; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [FICHIER] HTTP vers une adresse IP brute (pas de nom de domaine)"; flow:established,to_server; http.host; pcre:"/^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/"; metadata:triage fichier; sid:1100013; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [FICHIER] User-Agent d'outil en ligne de commande (PowerShell/curl/wget/BITS/certutil)"; flow:established,to_server; http.user_agent; pcre:"/(WindowsPowerShell|curl\/|wget|Microsoft BITS|CertUtil|Python-urllib|python-requests|Go-http-client)/i"; metadata:triage fichier; sid:1100014; rev:1;)
+
+
+# ---------------------------------------------------------------------
+# [C2] Infrastructure et comportement de commande et contrôle
+# ---------------------------------------------------------------------
+
+alert dns $HOME_NET any -> any any (msg:"TRIAGE [C2] Verification de l'IP publique (typique des infostealers)"; dns.query; pcre:"/(^|\.)(ipify\.org|ip-api\.com|checkip\.amazonaws\.com|icanhazip\.com|ifconfig\.me|ipinfo\.io|wtfismyip\.com|myexternalip\.com|checkip\.dyndns\.org|ident\.me|ipwho\.is|api\.myip\.com)$/i"; metadata:triage c2; sid:1100020; rev:1;)
+
+alert dns $HOME_NET any -> any any (msg:"TRIAGE [C2] Service legitime souvent abuse (Telegram/Discord/paste/tunnel)"; dns.query; pcre:"/(^|\.)(api\.telegram\.org|cdn\.discordapp\.com|discord\.com|pastebin\.com|paste\.ee|rentry\.co|transfer\.sh|temp\.sh|file\.io|ngrok\.io|ngrok-free\.app|trycloudflare\.com|raw\.githubusercontent\.com|bitbucket\.org)$/i"; metadata:triage c2; sid:1100021; rev:1;)
+
+alert dns $HOME_NET any -> any any (msg:"TRIAGE [C2] Domaine DNS dynamique"; dns.query; pcre:"/\.(duckdns\.org|ddns\.net|hopto\.org|zapto\.org|sytes\.net|no-ip\.(com|org|biz)|dynu\.net|freedns\.afraid\.org|ddnsfree\.com|myftp\.(biz|org)|serveftp\.com)$/i"; metadata:triage c2; sid:1100022; rev:1;)
+
+alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"TRIAGE [C2] Certificat TLS avec valeurs OpenSSL par defaut"; flow:established,to_client; tls.cert_subject; content:"Internet Widgits Pty Ltd"; metadata:triage c2; sid:1100023; rev:1;)
+
+alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"TRIAGE [C2] Certificat TLS emis pour localhost"; flow:established,to_client; tls.cert_subject; content:"CN=localhost"; metadata:triage c2; sid:1100024; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [C2] POST HTTP repetes vers le meme serveur (beaconing?)"; flow:established,to_server; http.method; content:"POST"; threshold:type threshold, track by_both, count 10, seconds 600; metadata:triage c2; sid:1100025; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET ![80,8080] (msg:"TRIAGE [C2] HTTP en clair sur un port non standard"; flow:established,to_server; metadata:triage c2; sid:1100026; rev:1;)
+
+alert tls $HOME_NET any -> $EXTERNAL_NET ![443,8443,993,995,465,853] (msg:"TRIAGE [C2] TLS sur un port non standard"; flow:established,to_server; metadata:triage c2; sid:1100027; rev:1;)
+
+
+# ---------------------------------------------------------------------
+# [POLITIQUE] IRC, BitTorrent, exfiltration
+# ---------------------------------------------------------------------
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [POLITIQUE] IRC - commande NICK"; flow:established,to_server; content:"NICK "; depth:5; metadata:triage politique; sid:1100030; rev:1;)
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [POLITIQUE] IRC - JOIN d'un canal"; flow:established,to_server; content:"JOIN #"; depth:6; metadata:triage politique; sid:1100031; rev:1;)
+
+alert tcp any any -> any any (msg:"TRIAGE [POLITIQUE] BitTorrent - handshake pair-a-pair"; flow:established; content:"|13|BitTorrent protocol"; depth:20; metadata:triage politique; sid:1100032; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [POLITIQUE] BitTorrent - annonce au tracker"; flow:established,to_server; http.uri; content:"info_hash="; metadata:triage politique; sid:1100033; rev:1;)
+
+alert bittorrent-dht any any -> any any (msg:"TRIAGE [POLITIQUE] BitTorrent DHT"; metadata:triage politique; sid:1100034; rev:1;)
+
+alert smtp $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [POLITIQUE] SMTP sortant depuis un poste (spam/exfiltration?)"; flow:established,to_server; metadata:triage politique; sid:1100035; rev:1;)
+
+alert ftp $HOME_NET any -> $EXTERNAL_NET any (msg:"TRIAGE [POLITIQUE] FTP sortant - televersement (STOR)"; flow:established,to_server; content:"STOR "; depth:5; metadata:triage politique; sid:1100036; rev:1;)
