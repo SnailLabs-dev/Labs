@@ -1,0 +1,33 @@
+title: Vérification de l'IP publique par un poste (Zeek DNS)
+id: 6b1f3c52-2a7e-4d0e-9a41-3e5c7d1a9b01
+status: experimental
+description: |
+  Un poste interne résout un service qui retourne l'adresse IP publique.
+  Les infostealers et les RAT le font souvent juste après l'infection
+  pour identifier la victime.
+author: SnailLabs
+date: 2026-11-16
+tags:
+  - attack.discovery
+  - attack.t1016
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection_source:
+    event.dataset: zeek.dns
+  selection_domaine:
+    dns.query.name|endswith:
+      - 'ipify.org'
+      - 'ip-api.com'
+      - 'checkip.amazonaws.com'
+      - 'icanhazip.com'
+      - 'ifconfig.me'
+      - 'ipinfo.io'
+      - 'wtfismyip.com'
+      - 'myexternalip.com'
+      - 'ident.me'
+  condition: selection_source and selection_domaine
+falsepositives:
+  - Outils d'administration ou scripts légitimes qui vérifient l'IP publique
+level: medium
